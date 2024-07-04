@@ -151,17 +151,6 @@ class GetProxy(object):
 
         self.geoip_reader = geoip2.database.Reader(os.path.join(self.base_dir, "data/GeoLite2-Country.mmdb"))
 
-    def load_input_proxies(self):
-        logger.info("[*] Load input proxies")
-
-        if self.input_proxies_file and os.path.exists(self.input_proxies_file):
-            with open(self.input_proxies_file) as fd:
-                for line in fd:
-                    try:
-                        self.input_proxies.append(json.loads(line))
-                    except:
-                        continue
-
     def validate_input_proxies(self):
         logger.info("[*] Validate input proxies")
         self.valid_proxies = self._validate_proxy_list(self.input_proxies)
@@ -170,15 +159,17 @@ class GetProxy(object):
         )
 
     def load_plugins(self):
-        logger.info("[*] Load plugins")
+        logger.info(f"[*] Load plugins{os.path.join(self.base_dir, 'plugin')}")
         for plugin_name in os.listdir(os.path.join(self.base_dir, "plugin")):
+            logger.info(f"[*] Load plugin {plugin_name}")
             if os.path.splitext(plugin_name)[1] != ".py" or plugin_name == "__init__.py":
                 continue
 
             try:
                 cls = load_object("getproxy.plugin.%s.Proxy" % os.path.splitext(plugin_name)[0])
-            except Exception as e:
-                logger.info("[-] Load Plugin %s error: %s" % (plugin_name, str(e)))
+            except Exception as err:
+                logger.exception(err)
+                logger.info("[-] Load Plugin %s error: %s" % (plugin_name, str(err)))
                 continue
 
             inst = cls()
@@ -210,19 +201,17 @@ class GetProxy(object):
         )
         logger.info("[*] Check %s proxies, Got %s valid proxies" % (len(self.proxies_hash), len(self.valid_proxies)))
 
+    def load_input_proxies(self):
+        logger.info("[*] Load input proxies")
+
+        logger.info(self.input_proxies_file)
+        if self.input_proxies_file and os.path.exists(self.input_proxies_file):
+            with open(self.input_proxies_file) as fd:
+                self.input_proxies = json.load(fd)
+
     def save_proxies(self):
-        if self.output_proxies_file:
-            outfile = open(self.output_proxies_file, "w")
-        else:
-            outfile = sys.stdout
-
-        for item in self.valid_proxies:
-            outfile.write("%s\n" % json.dumps(item))
-
-        outfile.flush()
-
-        if outfile != sys.stdout:
-            outfile.close()
+        with open(self.output_proxies_file, "w") as fd:
+            json.dump(self.valid_proxies, fd)
 
     def start(self):
         self.init()
