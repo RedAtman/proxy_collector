@@ -19,7 +19,8 @@ import geoip2.database
 import gevent.pool
 import requests
 
-from .utils import load_object, signal_name
+from utils import load_object, signal_name
+from plugin.base import BaseCollector
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class GetProxy(object):
 
     def __init__(self, input_proxies_file="proxies.json", output_proxies_file="proxies.json"):
         self.pool = gevent.pool.Pool(500)
-        self.plugins = []
+        self.plugins: list[BaseCollector] = []
         self.web_proxies = []
         self.valid_proxies: list[dict[str, str]] = []
         self.input_proxies = []
@@ -39,7 +40,7 @@ class GetProxy(object):
         self.input_proxies_file: str = input_proxies_file
         assert isinstance(output_proxies_file, str), "Output proxies file must be a string"
         self.output_proxies_file: str = output_proxies_file
-        self.proxies_hash = {}
+        self.proxies_hash: dict[str, bool] = {}
         self.origin_ip = None
         self.geoip_reader = None
 

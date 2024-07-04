@@ -1,29 +1,30 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals, absolute_import, division, print_function
+from __future__ import absolute_import, division, print_function, unicode_literals
 
-import re
 import logging
-import retrying
+import re
+
 import requests
+import retrying
+
+from .base import BaseCollector
 
 
 logger = logging.getLogger(__name__)
 
 
-class Proxy(object):
+class Proxy(BaseCollector):
     def __init__(self):
-        self.url = 'https://free-proxy-list.net/'
+        super().__init__()
+        self.url = "https://free-proxy-list.net/"
         self.re_ip_port_pattern = re.compile(
-            r"<tr><td>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})</td><td>(\d{1,5})</td>", re.I)
-
-        self.cur_proxy = None
-        self.proxies = []
-        self.result = []
+            r"<tr><td>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})</td><td>(\d{1,5})</td>", re.I
+        )
 
     @retrying.retry(stop_max_attempt_number=3)
-    def extract_proxy(self, page_num):
+    def extract_proxy(self, page_num: int):
         try:
             rp = requests.get(self.url.format(page=page_num), proxies=self.cur_proxy, timeout=10)
             re_ip_port_result = self.re_ip_port_pattern.findall(rp.text)
@@ -35,7 +36,7 @@ class Proxy(object):
             logger.error("[-] Request page {page} error: {error}".format(page=page_num, error=str(e)))
             while self.proxies:
                 new_proxy = self.proxies.pop(0)
-                self.cur_proxy = {new_proxy['type']: "%s:%s" % (new_proxy['host'], new_proxy['port'])}
+                self.cur_proxy = {new_proxy["type"]: "%s:%s" % (new_proxy["host"], new_proxy["port"])}
                 raise e
             else:
                 return []
@@ -50,7 +51,7 @@ class Proxy(object):
         self.result.extend(page_result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     p = Proxy()
     p.start()
 

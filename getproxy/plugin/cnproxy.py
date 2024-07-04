@@ -8,6 +8,7 @@ import time
 import logging
 import retrying
 import requests
+from .base import BaseCollector
 
 
 """
@@ -18,32 +19,29 @@ http://www.cnproxy.com/proxy1.html
 logger = logging.getLogger(__name__)
 
 
-class Proxy(object):
+class Proxy(BaseCollector):
     def __init__(self):
-        self.url = 'http://www.cnproxy.com/proxy{page}.html'  # 从1-10
-        self.re_ip_pattern = re.compile(r'<tr><td>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})<SCRIPT', re.I)
+        super().__init__()
+        self.url = "http://www.cnproxy.com/proxy{page}.html"  # 从1-10
+        self.re_ip_pattern = re.compile(r"<tr><td>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})<SCRIPT", re.I)
         self.re_port_encode_pattern = re.compile(r'javascript>document.write\(":"([+\w]{2,10})\)</SCRIPT>')
 
         self.port_dict = {
-            'v': '3',
-            'm': '4',
-            'a': '2',
-            'l': '9',
-            'q': '0',
-            'b': '5',
-            'i': '7',
-            'w': '6',
-            'r': '8',
-            'c': '1',
-            '+': ''
+            "v": "3",
+            "m": "4",
+            "a": "2",
+            "l": "9",
+            "q": "0",
+            "b": "5",
+            "i": "7",
+            "w": "6",
+            "r": "8",
+            "c": "1",
+            "+": "",
         }
 
-        self.cur_proxy = None
-        self.proxies = []
-        self.result = []
-
     @retrying.retry(stop_max_attempt_number=3)
-    def extract_proxy(self, page_num):
+    def extract_proxy(self, page_num: int):
         try:
             rp = requests.get(self.url.format(page=page_num), proxies=self.cur_proxy, timeout=10)
 
@@ -60,7 +58,7 @@ class Proxy(object):
             logger.error("[-] Request page {page} error: {error}".format(page=page_num, error=str(e)))
             while self.proxies:
                 new_proxy = self.proxies.pop(0)
-                self.cur_proxy = {new_proxy['type']: "%s:%s" % (new_proxy['host'], new_proxy['port'])}
+                self.cur_proxy = {new_proxy["type"]: "%s:%s" % (new_proxy["host"], new_proxy["port"])}
                 raise e
             else:
                 return []
@@ -68,7 +66,7 @@ class Proxy(object):
         re_port_result = []
         for each_result in re_port_encode_result:
             each_result = each_result.strip()
-            re_port_result.append(int(''.join(list(map(lambda x: self.port_dict.get(x, ''), each_result)))))
+            re_port_result.append(int("".join(list(map(lambda x: self.port_dict.get(x, ""), each_result)))))
 
         result_dict = dict(zip(re_ip_result, re_port_result))
         return [{"host": host, "port": int(port), "from": "cnproxy"} for host, port in result_dict.items()]
@@ -84,7 +82,7 @@ class Proxy(object):
             self.result.extend(page_result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     p = Proxy()
     p.start()
 

@@ -1,32 +1,32 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals, absolute_import, division, print_function
+from __future__ import absolute_import, division, print_function, unicode_literals
 
+import base64
+import codecs
+import logging
 import re
 import time
-import codecs
-import base64
-import logging
-import retrying
+
 import requests
+import retrying
+
+from .base import BaseCollector
 
 
 logger = logging.getLogger(__name__)
 
 
-class Proxy(object):
+class Proxy(BaseCollector):
     def __init__(self):
-        self.url = 'http://www.cool-proxy.net/proxies/http_proxy_list/sort:score/direction:desc/page:{page}'
+        super().__init__()
+        self.url = "http://www.cool-proxy.net/proxies/http_proxy_list/sort:score/direction:desc/page:{page}"
         self.re_ip_encode_pattern = re.compile(r'Base64.decode\(str_rot13\("([^"]+)"\)\)', re.I)
-        self.re_port_pattern = re.compile(r'<td>(\d{1,5})</td>', re.I)
-
-        self.cur_proxy = None
-        self.proxies = []
-        self.result = []
+        self.re_port_pattern = re.compile(r"<td>(\d{1,5})</td>", re.I)
 
     @retrying.retry(stop_max_attempt_number=3)
-    def extract_proxy(self, page_num):
+    def extract_proxy(self, page_num: int):
         try:
             rp = requests.get(self.url.format(page=page_num), proxies=self.cur_proxy, timeout=10)
 
@@ -43,15 +43,15 @@ class Proxy(object):
             logger.error("[-] Request page {page} error: {error}".format(page=page_num, error=str(e)))
             while self.proxies:
                 new_proxy = self.proxies.pop(0)
-                self.cur_proxy = {new_proxy['type']: "%s:%s" % (new_proxy['host'], new_proxy['port'])}
+                self.cur_proxy = {new_proxy["type"]: "%s:%s" % (new_proxy["host"], new_proxy["port"])}
                 raise e
             else:
                 return []
 
         re_ip_result = []
         for each_result in re_ip_encode_result:
-            decode_ip = base64.b64decode(codecs.decode(each_result.strip(), 'rot-13')).strip()
-            re_ip_result.append(decode_ip.decode('utf-8'))
+            decode_ip = base64.b64decode(codecs.decode(each_result.strip(), "rot-13")).strip()
+            re_ip_result.append(decode_ip.decode("utf-8"))
 
         result_dict = dict(zip(re_ip_result, re_port_result))
         return [{"host": host, "port": int(port), "from": "coolproxy"} for host, port in result_dict.items()]
@@ -67,7 +67,7 @@ class Proxy(object):
             self.result.extend(page_result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     p = Proxy()
     p.start()
 
