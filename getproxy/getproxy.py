@@ -227,14 +227,44 @@ class GetProxy(object):
             data = [proxy.__dict__ for proxy in self.valid_proxies]
             json.dump(data, fd)
 
+    def save_to_csv(self):
+        import csv
+
+        with open("proxies.csv", "w") as fd:
+            writer = csv.writer(fd)
+            header = [
+                "国家",
+                "国家代码",
+                "IP地址",
+                "端口",
+                "响应时间/秒",
+                "匿名度",
+                "有效性",
+                "来源",
+            ]
+            writer.writerow(header)
+            for proxy in self.valid_proxies:
+                row = [
+                    proxy.country_zh,
+                    proxy.country,
+                    proxy.host,
+                    proxy.port,
+                    proxy.response_time,
+                    proxy.anonymity,
+                    proxy.validate,
+                    proxy.source,
+                ]
+                writer.writerow(row)
+
     def start(self):
         self.init()
-        self.load_input_proxies()
+        # self.load_input_proxies()
         self.validate_input_proxies()
         self.load_plugins()
         self.grab_web_proxies()
         self.validate_web_proxies()
-        self.save_proxies()
+        # self.save_proxies()
+        self.save_to_csv()
 
 
 if __name__ == "__main__":
