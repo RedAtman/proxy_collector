@@ -18,7 +18,7 @@ from .base import BaseCollector
 logger = logging.getLogger(__name__)
 
 
-class Proxy(BaseCollector):
+class Collector(BaseCollector):
     def __init__(self):
         super().__init__()
         self.url = "http://www.cool-proxy.net/proxies/http_proxy_list/sort:score/direction:desc/page:{page}"
@@ -43,7 +43,7 @@ class Proxy(BaseCollector):
             logger.error("[-] Request page {page} error: {error}".format(page=page_num, error=str(e)))
             while self.proxies:
                 new_proxy = self.proxies.pop(0)
-                self.cur_proxy = {new_proxy["type"]: "%s:%s" % (new_proxy["host"], new_proxy["port"])}
+                self.cur_proxy = {new_proxy.type: "%s:%s" % (new_proxy.host, new_proxy.port)}
                 raise e
             else:
                 return []
@@ -54,7 +54,7 @@ class Proxy(BaseCollector):
             re_ip_result.append(decode_ip.decode("utf-8"))
 
         result_dict = dict(zip(re_ip_result, re_port_result))
-        return [{"host": host, "port": int(port), "from": "coolproxy"} for host, port in result_dict.items()]
+        return [{"host": host, "port": int(port), "source": "coolproxy"} for host, port in result_dict.items()]
 
     def start(self):
         for page in range(1, 10):
@@ -68,7 +68,7 @@ class Proxy(BaseCollector):
 
 
 if __name__ == "__main__":
-    p = Proxy()
+    p = Collector()
     p.start()
 
     for i in p.result:

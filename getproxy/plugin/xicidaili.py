@@ -16,7 +16,7 @@ from .base import BaseCollector
 logger = logging.getLogger(__name__)
 
 
-class Proxy(BaseCollector):
+class Collector(BaseCollector):
     def __init__(self):
         super().__init__()
         self.urls = ["http://www.xicidaili.com/nn/", "http://www.xicidaili.com/wt/"]
@@ -45,13 +45,13 @@ class Proxy(BaseCollector):
             logger.error("[-] Request url {url} error: {error}".format(url=url, error=str(e)))
             while self.proxies:
                 new_proxy = self.proxies.pop(0)
-                self.cur_proxy = {new_proxy["type"]: "%s:%s" % (new_proxy["host"], new_proxy["port"])}
+                self.cur_proxy = {new_proxy.type: "%s:%s" % (new_proxy.host, new_proxy.port)}
                 raise e
             else:
                 return []
 
         result_dict = dict(zip(re_ip_result, re_port_result))
-        return [{"host": host, "port": int(port), "from": "xicidaili"} for host, port in result_dict.items()]
+        return [{"host": host, "port": int(port), "source": "xicidaili"} for host, port in result_dict.items()]
 
     def start(self):
         for url in self.urls:
@@ -65,7 +65,7 @@ class Proxy(BaseCollector):
 
 
 if __name__ == "__main__":
-    p = Proxy()
+    p = Collector()
     p.start()
 
     for i in p.result:

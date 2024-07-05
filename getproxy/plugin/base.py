@@ -1,6 +1,7 @@
 import abc
 import re
 from typing import Any, Dict, List, Optional
+from models import Proxy
 
 
 class BaseCollector(abc.ABC):
@@ -8,7 +9,7 @@ class BaseCollector(abc.ABC):
     re_ip_encode_pattern: re.Pattern
     re_port_pattern: re.Pattern
     cur_proxy: Optional[dict]
-    proxies: List[Dict[str, Any]]
+    proxies: List[Proxy]
     result: List[Dict[str, Any]]
 
     def __init__(self) -> None:

@@ -17,7 +17,7 @@ from .base import BaseCollector
 logger = logging.getLogger(__name__)
 
 
-class Proxy(BaseCollector):
+class Collector(BaseCollector):
     def __init__(self):
         super().__init__()
         self.url = "http://proxy-list.org/english/index.php?p={page}"  # 从1-10
@@ -36,7 +36,7 @@ class Proxy(BaseCollector):
             logger.error("[-] Request page {page} error: {error}".format(page=page_num, error=str(e)))
             while self.proxies:
                 new_proxy = self.proxies.pop(0)
-                self.cur_proxy = {new_proxy["type"]: "%s:%s" % (new_proxy["host"], new_proxy["port"])}
+                self.cur_proxy = {new_proxy.type: "%s:%s" % (new_proxy.host, new_proxy.port)}
                 raise e
             else:
                 return []
@@ -45,7 +45,7 @@ class Proxy(BaseCollector):
         for each_result in re_ip_port_encode_result:
             decode_ip_port = base64.b64decode(each_result).decode("utf-8")
             host, port = decode_ip_port.split(":")
-            re_ip_port_result.append({"host": host, "port": int(port), "from": "proxylist"})
+            re_ip_port_result.append({"host": host, "port": int(port), "source": "proxylist"})
 
         return re_ip_port_result
 
@@ -61,7 +61,7 @@ class Proxy(BaseCollector):
 
 
 if __name__ == "__main__":
-    p = Proxy()
+    p = Collector()
     p.start()
 
     for i in p.result:

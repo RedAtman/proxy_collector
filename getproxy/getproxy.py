@@ -12,63 +12,71 @@ import copy
 import json
 import logging
 import os
+import pickle
 import signal
 import time
+from typing import Dict, List
 
 import geoip2.database
 import gevent.pool
-import requests
-
-from utils import load_object, signal_name
+from models import Proxy
 from plugin.base import BaseCollector
+import requests
+from utils import load_object, signal_name
 
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+CACHE_FILE = "cache.pickle"
+
 
 class GetProxy(object):
     base_dir = os.path.dirname(os.path.realpath(__file__))
 
-    def __init__(self, input_proxies_file="proxies.json", output_proxies_file="proxies.json"):
+    def __init__(self, input_proxies_file=CACHE_FILE, output_proxies_file=CACHE_FILE):
         self.pool = gevent.pool.Pool(500)
         self.plugins: list[BaseCollector] = []
-        self.web_proxies = []
-        self.valid_proxies: list[dict[str, str]] = []
-        self.input_proxies = []
+        # self.web_proxies: List[Proxy] = []
+        self.web_proxies: Dict[str, Proxy] = {}
+        self.valid_proxies: List[Proxy] = []
+        self.input_proxies: List[Proxy] = []
         assert isinstance(input_proxies_file, str), "Input proxies file must be a string"
         self.input_proxies_file: str = input_proxies_file
         assert isinstance(output_proxies_file, str), "Output proxies file must be a string"
         self.output_proxies_file: str = output_proxies_file
-        self.proxies_hash: dict[str, bool] = {}
+        # TODO: maybe remove self.proxies_hash
+        self.proxies_hash: Dict[str, bool] = {}
         self.origin_ip = None
-        self.geoip_reader = None
+        self.geoip_reader = geoip2.database.Reader(os.path.join(self.base_dir, "data/GeoLite2-Country.mmdb"))
 
     def _collect_result(self):
         for plugin in self.plugins:
-            if not plugin.result:
-                continue
+            try:
+                if not plugin.result:
+                    continue
 
-            self.web_proxies.extend(plugin.result)
+                for proxy in plugin.result:
+                    obj = Proxy(**proxy)
+                    self.web_proxies[obj.hash] = obj
+            except Exception as err:
+                logger.info(("plugin", plugin))
+                logger.exception(err)
 
-    def _validate_proxy(self, proxy, scheme="http"):
-        country = proxy.get("country")
-        host = proxy.get("host")
-        port = proxy.get("port")
-
-        proxy_hash = "%s://%s:%s" % (scheme, host, port)
-        if proxy_hash in self.proxies_hash:
+    def _validate_proxy(self, proxy: Proxy, scheme="http"):
+        if proxy.hash in self.proxies_hash:
             return
 
-        self.proxies_hash[proxy_hash] = True
-        request_proxies = {scheme: "%s:%s" % (host, port)}
+        self.proxies_hash[proxy.hash] = True
+        request_proxies = {scheme: "%s:%s" % (proxy.host, proxy.port)}
 
         request_begin = time.time()
         try:
             response_json = requests.get(
                 "%s://httpbin.org/get?show_env=1&cur=%s" % (scheme, request_begin), proxies=request_proxies, timeout=5
             ).json()
-        except:
+        except Exception as err:
+            logger.error(err)
             return
 
         request_end = time.time()
@@ -76,26 +84,24 @@ class GetProxy(object):
         if str(request_begin) != response_json.get("args", {}).get("cur", ""):
             return
 
-        anonymity = self._check_proxy_anonymity(response_json)
-        export_address = self._check_export_address(response_json)
+        proxy.anonymity = self._check_proxy_anonymity(response_json)
+        proxy.export_address = self._check_export_address(response_json)
 
         try:
-            country = country or self.geoip_reader.country(host).country.iso_code
+            _country = self.geoip_reader.country(proxy.host).country
+            country = _country.iso_code
+            country_zh = _country.names.get("zh-CN", "")
+            if country:
+                proxy.country = country
+            if country_zh:
+                proxy.country_zh = country_zh
         except Exception:
             country = "unknown"
+        proxy.response_time = round(request_end - request_begin, 2)
+        proxy.type = scheme
+        return proxy
 
-        return {
-            "type": scheme,
-            "host": host,
-            "export_address": export_address,
-            "port": port,
-            "anonymity": anonymity,
-            "country": country,
-            "response_time": round(request_end - request_begin, 2),
-            "from": proxy.get("from"),
-        }
-
-    def _validate_proxy_list(self, proxies, timeout=300):
+    def _validate_proxy_list(self, proxies: List[Proxy], timeout=300):
         valid_proxies = []
 
         def save_result(p):
@@ -150,8 +156,6 @@ class GetProxy(object):
         self.origin_ip = rp.json().get("origin", "")
         logger.info("[*] Current Ip Address: %s" % self.origin_ip)
 
-        self.geoip_reader = geoip2.database.Reader(os.path.join(self.base_dir, "data/GeoLite2-Country.mmdb"))
-
     def validate_input_proxies(self):
         logger.info("[*] Validate input proxies")
         self.valid_proxies = self._validate_proxy_list(self.input_proxies)
@@ -167,7 +171,10 @@ class GetProxy(object):
                 continue
 
             try:
-                cls = load_object("getproxy.plugin.%s.Proxy" % os.path.splitext(plugin_name)[0])
+                cls = load_object("plugin.%s.Collector" % os.path.splitext(plugin_name)[0])
+            except NameError as err:
+                logger.warning(err)
+                continue
             except Exception as err:
                 logger.exception(err)
                 logger.info("[-] Load Plugin %s error: %s" % (plugin_name, str(err)))
@@ -181,7 +188,11 @@ class GetProxy(object):
         logger.info("[*] Grab proxies")
 
         for plugin in self.plugins:
-            self.pool.spawn(plugin.start)
+            try:
+                self.pool.spawn(plugin.start)
+            except Exception as err:
+                logger.error(plugin)
+                logger.exception(err)
 
         self.pool.join(timeout=8 * 60)
         self.pool.kill()
@@ -192,7 +203,7 @@ class GetProxy(object):
         logger.info("[*] Validate web proxies")
         input_proxies_len = len(self.proxies_hash)
 
-        valid_proxies = self._validate_proxy_list(self.web_proxies)
+        valid_proxies = self._validate_proxy_list(list(self.web_proxies.values()))
         self.valid_proxies.extend(valid_proxies)
 
         output_proxies_len = len(self.proxies_hash) - input_proxies_len
@@ -204,15 +215,17 @@ class GetProxy(object):
 
     def load_input_proxies(self):
         logger.info("[*] Load input proxies")
-
         logger.info(self.input_proxies_file)
         if self.input_proxies_file and os.path.exists(self.input_proxies_file):
-            with open(self.input_proxies_file) as fd:
-                self.input_proxies = json.load(fd)
+            with open(self.input_proxies_file, "rb") as fd:
+                self.input_proxies = pickle.load(fd)
 
     def save_proxies(self):
-        with open(self.output_proxies_file, "w") as fd:
-            json.dump(self.valid_proxies, fd)
+        with open(CACHE_FILE, "wb") as fd:
+            pickle.dump(self.valid_proxies, fd)
+        with open("proxies.json", "w") as fd:
+            data = [proxy.__dict__ for proxy in self.valid_proxies]
+            json.dump(data, fd)
 
     def start(self):
         self.init()
