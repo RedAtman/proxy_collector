@@ -16,13 +16,14 @@ import pickle
 import signal
 import time
 from typing import Dict, List
+from datetime import datetime
 
 import geoip2.database
-import gevent.pool
 from models import Proxy
 from plugin.base import BaseCollector
-import requests
 from utils import load_object, signal_name
+import gevent.pool
+import requests
 
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ class GetProxy(object):
             country = "unknown"
         proxy.response_time = round(request_end - request_begin, 2)
         proxy.type = scheme
+        proxy.validate = True
         return proxy
 
     def _validate_proxy_list(self, proxies: List[Proxy], timeout=300):
@@ -166,12 +168,14 @@ class GetProxy(object):
     def load_plugins(self):
         logger.info(f"[*] Load plugins{os.path.join(self.base_dir, 'plugin')}")
         for plugin_name in os.listdir(os.path.join(self.base_dir, "plugin")):
-            logger.info(f"[*] Load plugin {plugin_name}")
-            if os.path.splitext(plugin_name)[1] != ".py" or plugin_name == "__init__.py":
+            if os.path.splitext(plugin_name)[1] != ".py":
+                continue
+            if plugin_name.startswith("_"):
                 continue
 
+            logger.info(f"[*] Load plugin {plugin_name}")
             try:
-                cls = load_object("plugin.%s.Collector" % os.path.splitext(plugin_name)[0])
+                cls = load_object("getproxy.plugin.%s.Collector" % os.path.splitext(plugin_name)[0])
             except NameError as err:
                 logger.warning(err)
                 continue
@@ -230,31 +234,45 @@ class GetProxy(object):
     def save_to_csv(self):
         import csv
 
-        with open("proxies.csv", "w") as fd:
+        with open(
+            f"proxies_{datetime.now().strftime('%Y%m%d%H%M%S')}_capture_{len(self.proxies_hash)}_valid_{len(self.valid_proxies)}.csv",
+            "w",
+        ) as fd:
             writer = csv.writer(fd)
             header = [
                 "国家",
                 "国家代码",
+                "协议",
                 "IP地址",
                 "端口",
                 "响应时间/秒",
                 "匿名度",
                 "有效性",
-                "来源",
+                # "来源",
             ]
             writer.writerow(header)
             for proxy in self.valid_proxies:
                 row = [
                     proxy.country_zh,
                     proxy.country,
+                    proxy.type,
                     proxy.host,
                     proxy.port,
                     proxy.response_time,
                     proxy.anonymity,
                     proxy.validate,
-                    proxy.source,
+                    # proxy.source,
                 ]
                 writer.writerow(row)
+
+    # def save_to_csv_from_dict(self, data):
+    #     import csv
+    #     headers = data[0].keys()
+
+    #     with open("file.csv", "w") as f:
+    #         writer = csv.DictWriter(f, fieldnames=headers)
+    #         writer.writeheader()
+    #         writer.writerows(data)
 
     def start(self):
         self.init()
