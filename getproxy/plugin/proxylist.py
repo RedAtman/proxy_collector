@@ -8,10 +8,9 @@ import logging
 import re
 import time
 
+from plugin.base import BaseCollector
 import requests
 import retrying
-
-from .base import BaseCollector
 
 
 logger = logging.getLogger(__name__)

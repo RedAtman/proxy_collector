@@ -6,10 +6,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import logging
 import re
 
+from plugin.base import BaseCollector
 import requests
 import retrying
-
-from .base import BaseCollector
 
 
 logger = logging.getLogger(__name__)

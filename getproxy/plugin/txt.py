@@ -6,10 +6,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import logging
 import re
 
+from plugin.base import BaseCollector
 import requests
 import retrying
-
-from .base import BaseCollector
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,7 @@ class Collector(BaseCollector):
             #'http://comp0.ru/downloads/proxylist.txt',
             #'http://www.proxylists.net/http_highanon.txt',
             #'http://www.proxylists.net/http.txt',
-            #'http://ab57.ru/downloads/proxylist.txt',
+            "http://ab57.ru/downloads/proxylist.txt",
             #'https://www.rmccurdy.com/scripts/proxy/good.txt'
         ]
 
